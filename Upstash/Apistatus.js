@@ -1,3 +1,13 @@
+export default async function handler(req, res) {
+    // Force allow POST
+    if (req.method !== 'POST' && req.method !== 'GET') {
+        return res.status(405).json({ error: 'Use POST for updates' });
+    }
+
+    const body = req.body || {};
+    // Log this in Vercel Dashboard to see if Roblox is actually reaching it
+    console.log("Incoming request:", { action: body.action, msgId: body.msgId });
+
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
