@@ -1,17 +1,16 @@
 {
-  "name": "mm2-watchdog",
+  "name": "railway-monitor",
   "version": "1.0.0",
-  "description": "Persistent watchdog for MM2 hits",
+  "description": "Heartbeat monitor for Roblox session tracking",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "axios": "^1.6.0",
-    "@upstash/redis": "^1.25.0"
+    "axios": "^1.6.0"
   },
   "engines": {
-    "node": "18.x"
+    "node": ">=16.0.0"
   }
 }
