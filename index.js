@@ -31,23 +31,30 @@ app.post("/ping", async (req, res) => {
 });
 
 async function handleDisconnect(msgId, webhookUrl) {
-    console.log(`User ${msgId} timed out. Sending 'Left' status...`);
+    console.log(`User ${msgId} timed out. Updating status via Gate...`);
     
-    // We must ensure the URL is a proper Discord Webhook URL
-    // If your Real_Webhook is a proxy, you need to provide the raw discord one or adjust this:
-    const cleanUrl = webhookUrl.split('?')[0].replace('http://89.169.54.29:5000/gate', 'https://discord.com/api/webhooks');
+    /**
+     * FIX EXPLANATION:
+     * Your webhookUrl is "http://89.169.54.29:5000/gate?t=JOB_ID"
+     * We append "&m=" + msgId so the Gate knows which message to edit.
+     * We hit the Gate with a PATCH request.
+     */
+    const gatePatchUrl = `${webhookUrl}&m=${msgId}`;
 
     try {
-        await axios.patch(`${webhookUrl}/messages/${msgId}`, {
+        await axios.patch(gatePatchUrl, {
             embeds: [{
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🔴 Player Left / Crashed```",
                 color: 16711680, // Red
-                footer: { text: "Disconnected via Railway Monitor" }
+                footer: { text = "Disconnected via Railway Monitor • " + new Date().toLocaleTimeString() }
             }]
         });
+        console.log(`Successfully updated status for message: ${msgId}`);
     } catch (err) {
-        console.error("Failed to update status:", err.response?.data || err.message);
+        // Log the error specifically to see if the Gate rejected it
+        console.error("Failed to update status through Gate:");
+        console.error(err.response?.data || err.message);
     }
     sessions.delete(msgId);
 }
