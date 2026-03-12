@@ -37,7 +37,7 @@ async function handleTimeout(user, msgId) {
     try {
         await axios.patch(`${DISCORD_WEBHOOK}/messages/${msgId}`, {
             embeds: [{
-                title = "Mozil Logic - Session Tracker",
+                title : "Mozil Logic - Session Tracker",
                 fields: [
                     { name: "Status", value: "```🔴 Player Left / Crashed```" },
                     { name: "User", value = "```" + user + "```" }
