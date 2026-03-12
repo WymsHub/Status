@@ -17,15 +17,12 @@ app.post("/ping", async (req, res) => {
     }
 
     // 2. STOP logic for Success actions
-    // If the player successfully traded (Claimed or Partial), we stop monitoring.
-    // The Lua script will start a NEW ping if more items need to be traded.
     if (action === "stop" || action === "claimed" || action === "partial") {
         console.log(`Action [${action.toUpperCase()}] received for ${msgId}. Monitoring stopped.`);
         return res.send(`Monitoring stopped for ${action}`);
     }
 
     // 3. START/RESET logic for "ping" (Waiting)
-    // Set a 45-second disconnect timer. If no new ping/action arrives, handleDisconnect runs.
     console.log(`Ping received for ${msgId}. Timer (re)set for 45s.`);
     const timeout = setTimeout(() => {
         handleDisconnect(msgId, webhookUrl, fields);
@@ -45,9 +42,9 @@ async function handleDisconnect(msgId, webhookUrl, savedFields) {
             embeds: [{
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🔴 Player Left / Crashed```",
-                color: 16711680, // Pure Red
-                fields: savedFields, // Keeps the last known inventory visible
-                footer: { text = "Disconnected | Wym's Scripts" }
+                color: 16711680, 
+                fields: savedFields, 
+                footer: { text: "Disconnected | Wym's Scripts" } // Fixed the = to : here
             }]
         });
         console.log(`Successfully patched Disconnect status for: ${msgId}`);
@@ -62,4 +59,3 @@ app.listen(PORT, () => {
     console.log(`--- Wym's Railway Monitor Active ---`);
     console.log(`Listening on Port: ${PORT}`);
 });
-
