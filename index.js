@@ -42,7 +42,7 @@ async function handleDisconnect(msgId, webhookUrl, savedFields) {
                 description: "## Status:\n```lua\n🔴 Player Left / Crashed```",
                 color: 16711680, // Pure Red
                 fields: savedFields, // <--- THIS KEEPS YOUR INVENTORY VISIBLE
-                footer: { text: "Disconnected via Railway Monitor" }
+                footer: { text: "Disconnected | Wym's Scripts" }
             }]
         });
         console.log(`Successfully updated status for: ${msgId}`);
