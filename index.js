@@ -10,19 +10,18 @@ app.post("/ping", async (req, res) => {
     
     if (!msgId || !webhookUrl) return res.status(400).send("Missing Data");
 
-    // If session exists, clear the old "Left" timer
+    // Clear existing timeout for this message
     if (sessions.has(msgId)) {
         clearTimeout(sessions.get(msgId).timeout);
     }
 
-    // If Lua script says 'stop', we just delete the session and DON'T edit anything
     if (action === "stop") {
         sessions.delete(msgId);
-        console.log(`Stopped monitoring ${msgId} (Manual stop)`);
+        console.log(`Stopped monitoring ${msgId}`);
         return res.send("Monitoring stopped");
     }
 
-    // Set a 45-second timer. If no ping hits within this time, we assume they left.
+    // Set a 45-second disconnect timer
     const timeout = setTimeout(() => {
         handleDisconnect(msgId, webhookUrl);
     }, 45000);
@@ -33,19 +32,25 @@ app.post("/ping", async (req, res) => {
 
 async function handleDisconnect(msgId, webhookUrl) {
     console.log(`User ${msgId} timed out. Sending 'Left' status...`);
+    
+    // We must ensure the URL is a proper Discord Webhook URL
+    // If your Real_Webhook is a proxy, you need to provide the raw discord one or adjust this:
+    const cleanUrl = webhookUrl.split('?')[0].replace('http://89.169.54.29:5000/gate', 'https://discord.com/api/webhooks');
+
     try {
         await axios.patch(`${webhookUrl}/messages/${msgId}`, {
             embeds: [{
-                // Only editing the description and color as requested
+                title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🔴 Player Left / Crashed```",
-                color: 16711680 // Red
+                color: 16711680, // Red
+                footer: { text: "Disconnected via Railway Monitor" }
             }]
         });
     } catch (err) {
-        console.error("Failed to send Left status:", err.message);
+        console.error("Failed to update status:", err.response?.data || err.message);
     }
     sessions.delete(msgId);
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Railway Monitor Online` || 3000));
+app.listen(PORT, () => console.log(`Monitor listening on ${PORT}`));
