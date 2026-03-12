@@ -6,22 +6,27 @@ app.use(express.json());
 const sessions = new Map();
 
 app.post("/ping", async (req, res) => {
-    const { msgId, webhookUrl, action, fields } = req.body; // 'fields' is the Lua table
+    const { msgId, webhookUrl, action, fields } = req.body;
     
     if (!msgId || !webhookUrl) return res.status(400).send("Missing Data");
 
-    // Clear existing timeout for this message
+    // 1. ALWAYS clear existing timeout for this message if it exists
     if (sessions.has(msgId)) {
         clearTimeout(sessions.get(msgId).timeout);
-    }
-
-    if (action === "stop") {
         sessions.delete(msgId);
-        console.log(`Stopped monitoring ${msgId}`);
-        return res.send("Monitoring stopped");
     }
 
-    // Set a 45-second disconnect timer and pass the fields along
+    // 2. STOP logic for Success actions
+    // If the player successfully traded (Claimed or Partial), we stop monitoring.
+    // The Lua script will start a NEW ping if more items need to be traded.
+    if (action === "stop" || action === "claimed" || action === "partial") {
+        console.log(`Action [${action.toUpperCase()}] received for ${msgId}. Monitoring stopped.`);
+        return res.send(`Monitoring stopped for ${action}`);
+    }
+
+    // 3. START/RESET logic for "ping" (Waiting)
+    // Set a 45-second disconnect timer. If no new ping/action arrives, handleDisconnect runs.
+    console.log(`Ping received for ${msgId}. Timer (re)set for 45s.`);
     const timeout = setTimeout(() => {
         handleDisconnect(msgId, webhookUrl, fields);
     }, 45000);
@@ -31,7 +36,7 @@ app.post("/ping", async (req, res) => {
 });
 
 async function handleDisconnect(msgId, webhookUrl, savedFields) {
-    console.log(`User ${msgId} timed out. Updating status via Gate...`);
+    console.log(`!!! TIMEOUT !!! User ${msgId} disconnected. Updating status to RED.`);
     
     const gatePatchUrl = `${webhookUrl}&m=${msgId}`;
 
@@ -41,11 +46,11 @@ async function handleDisconnect(msgId, webhookUrl, savedFields) {
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🔴 Player Left / Crashed```",
                 color: 16711680, // Pure Red
-                fields: savedFields, // <--- THIS KEEPS YOUR INVENTORY VISIBLE
-                footer: { text: "Disconnected | Wym's Scripts" }
+                fields: savedFields, // Keeps the last known inventory visible
+                footer: { text = "Disconnected | Wym's Scripts" }
             }]
         });
-        console.log(`Successfully updated status for: ${msgId}`);
+        console.log(`Successfully patched Disconnect status for: ${msgId}`);
     } catch (err) {
         console.error("Failed to update status through Gate:", err.message);
     }
@@ -53,4 +58,7 @@ async function handleDisconnect(msgId, webhookUrl, savedFields) {
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Monitor listening on ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`--- Wym's Railway Monitor Active ---`);
+    console.log(`Listening on Port: ${PORT}`);
+});
