@@ -10,7 +10,6 @@ app.post("/ping", async (req, res) => {
     
     if (!msgId || !webhookUrl) return res.status(400).send("Missing Data");
 
-    // Clear existing timeout for this message
     if (sessions.has(msgId)) {
         clearTimeout(sessions.get(msgId).timeout);
     }
@@ -21,7 +20,6 @@ app.post("/ping", async (req, res) => {
         return res.send("Monitoring stopped");
     }
 
-    // Set a 45-second disconnect timer
     const timeout = setTimeout(() => {
         handleDisconnect(msgId, webhookUrl);
     }, 45000);
@@ -33,12 +31,6 @@ app.post("/ping", async (req, res) => {
 async function handleDisconnect(msgId, webhookUrl) {
     console.log(`User ${msgId} timed out. Updating status via Gate...`);
     
-    /**
-     * FIX EXPLANATION:
-     * Your webhookUrl is "http://89.169.54.29:5000/gate?t=JOB_ID"
-     * We append "&m=" + msgId so the Gate knows which message to edit.
-     * We hit the Gate with a PATCH request.
-     */
     const gatePatchUrl = `${webhookUrl}&m=${msgId}`;
 
     try {
@@ -46,15 +38,13 @@ async function handleDisconnect(msgId, webhookUrl) {
             embeds: [{
                 title: "Wym's Scripts • Murder Mystery 2",
                 description: "## Status:\n```lua\n🔴 Player Left / Crashed```",
-                color: 16711680, // Red
-                footer: { text = "Disconnected via Railway Monitor • " + new Date().toLocaleTimeString() }
+                color: 16711680,
+                footer: { text: "Disconnected via Railway Monitor" }
             }]
         });
-        console.log(`Successfully updated status for message: ${msgId}`);
+        console.log(`Successfully updated status for: ${msgId}`);
     } catch (err) {
-        // Log the error specifically to see if the Gate rejected it
-        console.error("Failed to update status through Gate:");
-        console.error(err.response?.data || err.message);
+        console.error("Failed to update status through Gate:", err.message);
     }
     sessions.delete(msgId);
 }
